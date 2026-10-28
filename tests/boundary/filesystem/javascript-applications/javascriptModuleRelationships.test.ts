@@ -789,6 +789,13 @@ it("preserves CommonJS receiver lifetime and shadowing through erased wrappers",
           (exports as any).detached = 1;
           (module.exports as any).connected = 2;
           delete (exports as any).connected;
+          delete ((exports as any).connected as any);
+          {
+            const exports = { connected: 3 };
+            const module = { exports: { connected: 4 } };
+            delete (exports.connected as any);
+            delete (module.exports.connected as any);
+          }
           function local(exports: any, module: any) {
             exports!.shadowed = 3;
             module!.exports.shadowed = 4;
@@ -805,21 +812,32 @@ it("preserves CommonJS receiver lifetime and shadowing through erased wrappers",
 });
 
 it.each([
-  "(exports as Record<string, unknown>)",
-  "(module!.exports satisfies Record<string, unknown>)",
-  "(<Record<string, unknown>>module.exports)",
-  "module.exports!",
+  [
+    "(exports as Record<string, unknown>)",
+    "((exports as any).wrappedDeleted as any)",
+  ],
+  [
+    "(module!.exports satisfies Record<string, unknown>)",
+    "(module!.exports.wrappedDeleted satisfies unknown)",
+  ],
+  [
+    "(<Record<string, unknown>>module.exports)",
+    "(<unknown>(<Record<string, unknown>>module.exports).wrappedDeleted)",
+  ],
+  ["module.exports!", "module.exports!.wrappedDeleted!"],
 ])(
   "applies field deletion to wrapped CommonJS receiver %s",
-  async (receiver) => {
+  async (receiver, argument) => {
     const root = await createTestTempDirectory(
       "rea-wrapped-commonjs-deletion-",
     );
     await writeFixtureFiles(root, {
       "app.cts": `
       ${receiver}.deleted = 1;
-      ${receiver}.intact = 2;
+      ${receiver}.wrappedDeleted = 2;
+      ${receiver}.intact = 3;
       delete ${receiver}.deleted;
+      delete ${argument};
     `,
     });
     const graph = await relationshipGraph(root);
@@ -829,5 +847,7 @@ it.each([
         ({ properties }) => properties.semantic_role === "source-module",
       )?.properties.export_names,
     ).toEqual(["intact"]);
+    for (const name of ["deleted", "wrappedDeleted"])
+      expect(findExportNode(graph, "app.cts", name)).toBeUndefined();
   },
 );

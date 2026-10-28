@@ -562,16 +562,17 @@ export function* indexCommonJsExportReceiversSteps(
           t.isUpdateExpression(node) ||
           t.isUnaryExpression(node, { operator: "delete" })
         ) {
+          const argument = unwrapJavaScriptExpression(node.argument).node;
           if (t.isUnaryExpression(node, { operator: "delete" })) {
-            const name = commonJsExportName(node.argument, state);
+            const name = commonJsExportName(argument, state);
             if (
               name !== undefined &&
-              !isCommonJsModuleExports(node.argument, state) &&
-              (t.isMemberExpression(node.argument) ||
-                t.isOptionalMemberExpression(node.argument))
+              !isCommonJsModuleExports(argument, state) &&
+              (t.isMemberExpression(argument) ||
+                t.isOptionalMemberExpression(argument))
             ) {
               const receiver = isCommonJsGlobal(
-                node.argument.object,
+                argument.object,
                 state,
                 "exports",
               )
@@ -585,7 +586,7 @@ export function* indexCommonJsExportReceiversSteps(
               deletions.set(receiver, fields);
             }
           }
-          write(node.argument, null, mode);
+          write(argument, null, mode);
         } else if (isCommonJsGlobal(node, state, "exports")) {
           values.set(node, exportsIdentity);
         } else if (isCommonJsModuleExports(node, state)) {
